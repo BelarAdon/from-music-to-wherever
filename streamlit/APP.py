@@ -6,10 +6,31 @@ from Otros.prediccion import predecir_mood_por_titulo, generar_outfit_recomendad
 from Otros.recomendador import distancia_umap, recomendar_por_cancion
 from Otros.mood_imagenes import mood_imagenes
 from Otros.descripciones_features import descripciones
+import joblib
+from huggingface_hub import hf_hub_download
 
 # Cargar datos y modelos
 df = pd.read_csv("Datos/data.csv")
 
+# 2. CARGA DE MODELOS (AQUÍ ES DONDE VA TODO)
+@st.cache_resource
+def load_models():
+    repo_id = "Eskarcho/modelo_streamlit"
+
+    model1_path = hf_hub_download(repo_id, "modelos/features_cols.pkl")
+    model2_path = hf_hub_download(repo_id, "modelos/umap_model.pkl")
+    model3_path = hf_hub_download(repo_id, "modelos/kmeans_umap.pkl")
+    model4_path = hf_hub_download(repo_id, "modelos/scaler.pkl")
+
+    feature_cols = joblib.load(model1_path)
+    umap_model = joblib.load(model2_path)
+    kmeans = joblib.load(model3_path)
+    scaler = joblib.load(model4_path)
+
+    return feature_cols, umap_model, kmeans, scaler
+
+
+feature_cols, umap_model, kmeans, scaler = load_models()
 # Interfaz
 
 st.title("🎧 ¿Qué escuchas? → Outfit Recommender")
