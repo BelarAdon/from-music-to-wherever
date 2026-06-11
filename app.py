@@ -4,8 +4,7 @@ import numpy as np
 import joblib
 from huggingface_hub import hf_hub_download
 
-from Otros.prediccion import predecir_mood_por_titulo, generar_outfit_recomendado, predecir_mood
-from Otros.recomendador import distancia_umap, recomendar_por_cancion
+from Otros.prediccion import predecir_mood_por_titulo, generar_outfit_recomendado
 from Otros.mood_imagenes import mood_imagenes
 from Otros.descripciones_features import descripciones
 
@@ -17,195 +16,121 @@ repo_id = "Eskarcho/modelo_streamlit"
 
 
 # =========================
-# DATASET (CACHE DATA)
+# DATASET OPTIMIZADO (YA CON EMBEDDINGS)
 # =========================
 @st.cache_data
 def load_data():
-    path = hf_hub_download(repo_id, "Datos/Data_Spotify_Features.csv")
-    return pd.read_csv(path)
+    path = hf_hub_download(repo_id, "Datos/dataset_final.parquet")
+    return pd.read_parquet(path)
 
 
 df = load_data()
 
 
 # =========================
-# MODELOS (CACHE RESOURCE)
+# MODELOS LIGEROS (SOLO LO NECESARIO)
 # =========================
 @st.cache_resource
 def load_models():
-    feature_cols = joblib.load(
-        hf_hub_download(repo_id, "modelos/features_cols.pkl")
-    )
-    umap_model = joblib.load(
-        hf_hub_download(repo_id, "modelos/umap_model.pkl")
-    )
-    kmeans = joblib.load(
-        hf_hub_download(repo_id, "modelos/kmeans_umap.pkl")
-    )
     scaler = joblib.load(
         hf_hub_download(repo_id, "modelos/scaler.pkl")
     )
+    kmeans = joblib.load(
+        hf_hub_download(repo_id, "modelos/kmeans.pkl")
+    )
 
-    return feature_cols, umap_model, kmeans, scaler
-
-
-feature_cols, umap_model, kmeans, scaler = load_models()
-
-
-# =========================
-# UI
-# =========================
-st.title("🎧 ¿Qué escuchas? → Outfit Recommender")
-st.write("Busca una canción o manipula sus audio-features para ver cómo cambia el mood 🎨👗")
+    return scaler, kmeans
 
 
-tab_audio_features, tab_prediccion_cancion = st.tabs([
-    "🎛️ Predicción por audio features",
-    "🎵 Predicción por canción"
-])
+scaler, kmeans = load_models()
 
 
 # =========================
-# TAB 1 - AUDIO FEATURES
+# STREAMLIT UI
 # =========================
-with tab_audio_features:
+st.title("🎧 Music → Outfit AI (PRO VERSION)")
 
-    st.header("🎛️ Ajusta las audio-features")
 
-    titulo_input = st.text_input("Título de la canción", key="titulo_audio")
-    artista_input = st.text_input("Artista", key="artista_audio")
+tab1, tab2 = st.tabs(["🎛 Audio features", "🎵 Song search"])
 
-    if "audio_features_base" not in st.session_state:
-        st.session_state.audio_features_base = None
-        st.session_state.audio_track_info = None
 
-    if st.button("Obtener audio features"):
+# =========================
+# TAB 1
+# =========================
+with tab1:
 
-        fila = df[
-            (df["track_name"].str.lower() == titulo_input.lower().strip()) &
-            (df["track_artist"].str.lower() == artista_input.lower().strip())
+    titulo = st.text_input("Título")
+    artista = st.text_input("Artista")
+
+    if st.button("Buscar"):
+
+        row = df[
+            (df["track_name"].str.lower() == titulo.lower().strip()) &
+            (df["track_artist"].str.lower() == artista.lower().strip())
         ]
 
-        if fila.empty:
-            st.error("No se encontró la canción.")
-            st.session_state.audio_features_base = None
-            st.session_state.audio_track_info = None
+        if row.empty:
+            st.error("No encontrada")
         else:
-            fila = fila.iloc[0]
+            row = row.iloc[0]
 
-            st.session_state.audio_features_base = fila[feature_cols].to_dict()
-            st.session_state.audio_track_info = {
-                "title": fila["track_name"],
-                "artist": fila["track_artist"]
-            }
+            st.success(f"{row['track_name']} — {row['track_artist']}")
 
-            st.success("Audio features cargadas ✔")
+            # 🎯 MOOD YA PRECALCULADO (NO UMAP, NO SCALER)
+            mood = row["mood"]
 
-
-    if st.session_state.audio_features_base:
-
-        base = st.session_state.audio_features_base
-        info = st.session_state.audio_track_info
-
-        st.markdown(f"**{info['title']} — {info['artist']}**")
-
-        sliders = {}
-
-        for col in feature_cols:
-            min_v = float(df[col].min())
-            max_v = float(df[col].max())
-            base_v = float(base[col])
-
-            sliders[col] = st.slider(
-                col,
-                min_v,
-                max_v,
-                base_v,
-                step=(max_v - min_v) / 100 if max_v != min_v else 0.01,
-                key=f"slider_{col}"
-            )
-
-            st.caption(descripciones.get(col, ""))
-
-        features_dict = sliders
+            st.markdown(f"## {mood}")
+            st.image(mood_imagenes.get(mood))
 
 
-        # =========================
-        # PREDICCIÓN MOOD
-        # =========================
-        cluster, mood = predecir_mood(
-            features_dict, feature_cols, scaler, umap_model, kmeans
-        )
+            # =========================
+            # RECOMENDACIÓN ULTRA RÁPIDA
+            # =========================
+            emb = row[[f"embedding_{i}" for i in range(10)]].values
 
-        st.markdown(
-            f"<h1 style='text-align:center;color:#FF4B4B'>{mood}</h1>",
-            unsafe_allow_html=True
-        )
+            emb_matrix = np.vstack(df[[f"embedding_{i}" for i in range(10)]].values)
 
-        if mood in mood_imagenes:
-            st.image(mood_imagenes[mood])
+            dists = np.linalg.norm(emb_matrix - emb, axis=1)
 
+            recs = df.copy()
+            recs["dist"] = dists
 
-        # =========================
-        # RECOMENDACIÓN
-        # =========================
-        st.subheader("🎧 Canciones similares")
+            recs = recs.sort_values("dist").head(10)
 
-        vec = np.array([features_dict[c] for c in feature_cols], dtype=float)
-        scaled = scaler.transform([vec])
-        emb = umap_model.transform(scaled)[0]
-
-        # VECTORIAL (MUCHO MÁS RÁPIDO QUE apply)
-        umap_cols = [f"umap_{i}" for i in range(10)]
-        emb_matrix = np.vstack(df[umap_cols].values)
-
-        dists = np.linalg.norm(emb_matrix - emb, axis=1)
-
-        df_rec = df.copy()
-        df_rec["dist"] = dists
-
-        recs = df_rec.sort_values("dist").head(10)
-
-        st.dataframe(
-            recs[["track_name", "track_artist"]]
-            .rename(columns={"track_name": "Título", "track_artist": "Artista"})
-        )
+            st.dataframe(recs[["track_name", "track_artist"]])
 
 
 # =========================
-# TAB 2 - CANCIÓN
+# TAB 2
 # =========================
-with tab_prediccion_cancion:
+with tab2:
 
-    titulo = st.text_input("Título", key="titulo_song")
-    artista = st.text_input("Artista", key="artista_song")
+    titulo = st.text_input("Título canción", key="t2")
+    artista = st.text_input("Artista", key="t2a")
 
     estacion = st.selectbox("Estación", ["primavera", "verano", "otoño", "invierno"])
     clima = st.selectbox("Clima", ["sol", "lluvia", "frio", "calor"])
     estilo = st.selectbox("Estilo", ["femenino", "masculino", "unisex", "streetwear", "minimal", "edgy"])
 
-    if st.button("Buscar y recomendar"):
+    if st.button("Recomendar outfit"):
 
-        resultado = predecir_mood_por_titulo(
-            df, titulo, artista, feature_cols, scaler, umap_model, kmeans,
+        res = predecir_mood_por_titulo(
+            df, titulo, artista, None, None, None, None,
             estacion=estacion,
             clima=clima,
             estilo=estilo
         )
 
-        if "error" in resultado:
-            st.error(resultado["error"])
+        if "error" in res:
+            st.error(res["error"])
         else:
 
-            st.subheader(f"{resultado['title']} — {resultado['artist']}")
-            st.write(f"Mood: {resultado['mood']} | Cluster: {resultado['cluster']}")
+            st.subheader(f"{res['title']} — {res['artist']}")
+            st.write(f"Mood: {res['mood']}")
 
-            outfit = resultado["outfit"]["outfit_final"]
+            outfit = res["outfit"]["outfit_final"]
 
             st.markdown("### 👗 Outfit")
             st.write(outfit["prendas"])
             st.write(outfit["accesorios"])
             st.write(outfit["justificacion"])
-
-            st.markdown("### 🎨 Paleta")
-            st.write(resultado["outfit"]["paleta_colores"])
