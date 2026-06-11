@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from Otros.cargar_modelos import scaler, kmeans, umap_model, feature_cols
 from Otros.prediccion import predecir_mood_por_titulo, generar_outfit_recomendado, predecir_mood
 from Otros.recomendador import distancia_umap, recomendar_por_cancion
 from Otros.mood_imagenes import mood_imagenes
@@ -15,7 +14,13 @@ repo_id = "Eskarcho/modelo_streamlit"
 
 dataset_path = hf_hub_download(repo_id, "Datos/Data_Spotify_Features.csv")
 
-df = pd.read_csv(dataset_path)
+@st.cache_data
+def load_data():
+    repo_id = "Eskarcho/modelo_streamlit"
+    path = hf_hub_download(repo_id, "Datos/Data_Spotify_Features.csv")
+    return pd.read_csv(path)
+
+df = load_data()
 
 # 2. CARGA DE MODELOS (AQUÍ ES DONDE VA TODO)
 @st.cache_resource
