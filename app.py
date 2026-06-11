@@ -16,37 +16,40 @@ repo_id = "Eskarcho/modelo_streamlit"
 
 
 # =========================
-# DATASET OPTIMIZADO (YA CON EMBEDDINGS)
+# DATASET (OPTIMIZADO)
 # =========================
 @st.cache_data
 def load_data():
     path = hf_hub_download(repo_id, "Datos/dataset_final.parquet")
     return pd.read_parquet(path)
 
-
 df = load_data()
 
 
 # =========================
-# MODELOS LIGEROS (SOLO LO NECESARIO)
+# EMBEDDINGS MATRIX (CRÍTICO PARA RENDIMIENTO)
+# =========================
+@st.cache_resource
+def get_embedding_matrix(df):
+    return np.vstack(df[[f"embedding_{i}" for i in range(10)]].values)
+
+emb_matrix = get_embedding_matrix(df)
+
+
+# =========================
+# MODELOS LIGEROS
 # =========================
 @st.cache_resource
 def load_models():
-    scaler = joblib.load(
-        hf_hub_download(repo_id, "modelos/scaler.pkl")
-    )
-    kmeans = joblib.load(
-        hf_hub_download(repo_id, "modelos/kmeans.pkl")
-    )
-
+    scaler = joblib.load(hf_hub_download(repo_id, "modelos/scaler.pkl"))
+    kmeans = joblib.load(hf_hub_download(repo_id, "modelos/kmeans.pkl"))
     return scaler, kmeans
-
 
 scaler, kmeans = load_models()
 
 
 # =========================
-# STREAMLIT UI
+# UI
 # =========================
 st.title("🎧 Music → Outfit AI (PRO VERSION)")
 
@@ -55,7 +58,7 @@ tab1, tab2 = st.tabs(["🎛 Audio features", "🎵 Song search"])
 
 
 # =========================
-# TAB 1
+# TAB 1 - SEARCH + RECOMMENDATION
 # =========================
 with tab1:
 
@@ -76,20 +79,18 @@ with tab1:
 
             st.success(f"{row['track_name']} — {row['track_artist']}")
 
-            # 🎯 MOOD YA PRECALCULADO (NO UMAP, NO SCALER)
+            # 🎯 MOOD YA PRECALCULADO
             mood = row["mood"]
-
             st.markdown(f"## {mood}")
             st.image(mood_imagenes.get(mood))
 
+            # =========================
+            # RECOMENDADOR ULTRA RÁPIDO
+            # =========================
 
-            # =========================
-            # RECOMENDACIÓN ULTRA RÁPIDA
-            # =========================
             emb = row[[f"embedding_{i}" for i in range(10)]].values
 
-            emb_matrix = np.vstack(df[[f"embedding_{i}" for i in range(10)]].values)
-
+            # vectorización (sin copy de df)
             dists = np.linalg.norm(emb_matrix - emb, axis=1)
 
             recs = df.copy()
@@ -97,11 +98,14 @@ with tab1:
 
             recs = recs.sort_values("dist").head(10)
 
-            st.dataframe(recs[["track_name", "track_artist"]])
+            st.dataframe(
+                recs[["track_name", "track_artist"]]
+                .rename(columns={"track_name": "Título", "track_artist": "Artista"})
+            )
 
 
 # =========================
-# TAB 2
+# TAB 2 - OUTFIT
 # =========================
 with tab2:
 
@@ -110,12 +114,21 @@ with tab2:
 
     estacion = st.selectbox("Estación", ["primavera", "verano", "otoño", "invierno"])
     clima = st.selectbox("Clima", ["sol", "lluvia", "frio", "calor"])
-    estilo = st.selectbox("Estilo", ["femenino", "masculino", "unisex", "streetwear", "minimal", "edgy"])
+    estilo = st.selectbox(
+        "Estilo",
+        ["femenino", "masculino", "unisex", "streetwear", "minimal", "edgy"]
+    )
 
     if st.button("Recomendar outfit"):
 
         res = predecir_mood_por_titulo(
-            df, titulo, artista, None, None, None, None,
+            df,
+            titulo,
+            artista,
+            None,
+            None,
+            None,
+            None,
             estacion=estacion,
             clima=clima,
             estilo=estilo
@@ -131,6 +144,6 @@ with tab2:
             outfit = res["outfit"]["outfit_final"]
 
             st.markdown("### 👗 Outfit")
-            st.write(outfit["prendas"])
-            st.write(outfit["accesorios"])
-            st.write(outfit["justificacion"])
+            st.write("Prendas:", outfit["prendas"])
+            st.write("Accesorios:", outfit["accesorios"])
+            st.write("Justificación:", outfit["justificacion"])
