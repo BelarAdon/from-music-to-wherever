@@ -10,7 +10,12 @@ import joblib
 from huggingface_hub import hf_hub_download
 
 # Cargar datos y modelos
-df = pd.read_csv("Datos/data.csv")
+
+repo_id = "Eskarcho/modelo_streamlit"
+
+dataset_path = hf_hub_download(repo_id, "Datos/Data_Spotify_Features.csv")
+
+df = pd.read_csv(dataset_path)
 
 # 2. CARGA DE MODELOS (AQUÍ ES DONDE VA TODO)
 @st.cache_resource
