@@ -6,17 +6,13 @@ from huggingface_hub import hf_hub_download
 
 from Otros.prediccion import predecir_mood_por_titulo, generar_outfit_recomendado
 from Otros.mood_imagenes import mood_imagenes
-from Otros.descripciones_features import descripciones
 
 
-# =========================
-# CONFIG
-# =========================
 repo_id = "Eskarcho/modelo_streamlit"
 
 
 # =========================
-# DATASET (OPTIMIZADO)
+# DATASET (OPTIMIZADO PARQUET)
 # =========================
 @st.cache_data
 def load_data():
@@ -27,38 +23,37 @@ df = load_data()
 
 
 # =========================
-# EMBEDDINGS MATRIX (CRÍTICO PARA RENDIMIENTO)
-# =========================
-@st.cache_resource
-def get_embedding_matrix(df):
-    return np.vstack(df[[f"embedding_{i}" for i in range(10)]].values)
-
-emb_matrix = get_embedding_matrix(df)
-
-
-# =========================
-# MODELOS LIGEROS
+# MODELOS (SOLO UNA VEZ)
 # =========================
 @st.cache_resource
 def load_models():
-    scaler = joblib.load(hf_hub_download(repo_id, "modelos/scaler.pkl"))
-    kmeans = joblib.load(hf_hub_download(repo_id, "modelos/kmeans.pkl"))
-    return scaler, kmeans
+    scaler_path = hf_hub_download(repo_id, "modelos/scaler.pkl")
+    kmeans_path = hf_hub_download(repo_id, "modelos/kmeans_umap.pkl")
+    umap_path = hf_hub_download(repo_id, "modelos/umap_model.pkl")
+    features_path = hf_hub_download(repo_id, "modelos/feature_cols.pkl")
 
-scaler, kmeans = load_models()
+    scaler = joblib.load(scaler_path)
+    kmeans = joblib.load(kmeans_path)
+    umap_model = joblib.load(umap_path)
+    feature_cols = joblib.load(features_path)
+
+    return scaler, kmeans, umap_model, feature_cols
+
+
+scaler, kmeans, umap_model, feature_cols = load_models()
 
 
 # =========================
 # UI
 # =========================
-st.title("🎧 Music → Outfit AI (PRO VERSION)")
+st.title("🎧 Music → Outfit AI PRO")
 
 
-tab1, tab2 = st.tabs(["🎛 Audio features", "🎵 Song search"])
+tab1, tab2 = st.tabs(["🎛 Features", "🎵 Song"])
 
 
 # =========================
-# TAB 1 - SEARCH + RECOMMENDATION
+# TAB 1 (OPTIMIZADO)
 # =========================
 with tab1:
 
@@ -79,33 +74,28 @@ with tab1:
 
             st.success(f"{row['track_name']} — {row['track_artist']}")
 
-            # 🎯 MOOD YA PRECALCULADO
             mood = row["mood"]
             st.markdown(f"## {mood}")
             st.image(mood_imagenes.get(mood))
 
             # =========================
-            # RECOMENDADOR ULTRA RÁPIDO
+            # RECOMENDACIÓN ULTRA OPTIMIZADA (NO COPY DF)
             # =========================
 
-            emb = row[[f"embedding_{i}" for i in range(10)]].values
+            emb = row[[f"embedding_{i}" for i in range(10)]].values.astype(np.float32)
 
-            # vectorización (sin copy de df)
+            emb_matrix = np.vstack(df[[f"embedding_{i}" for i in range(10)]].values).astype(np.float32)
+
+            # vectorizado (MUCHO más rápido y menos RAM)
             dists = np.linalg.norm(emb_matrix - emb, axis=1)
 
-            recs = df.copy()
-            recs["dist"] = dists
+            idx = np.argsort(dists)[:10]
 
-            recs = recs.sort_values("dist").head(10)
-
-            st.dataframe(
-                recs[["track_name", "track_artist"]]
-                .rename(columns={"track_name": "Título", "track_artist": "Artista"})
-            )
+            st.dataframe(df.iloc[idx][["track_name", "track_artist"]])
 
 
 # =========================
-# TAB 2 - OUTFIT
+# TAB 2
 # =========================
 with tab2:
 
@@ -114,10 +104,7 @@ with tab2:
 
     estacion = st.selectbox("Estación", ["primavera", "verano", "otoño", "invierno"])
     clima = st.selectbox("Clima", ["sol", "lluvia", "frio", "calor"])
-    estilo = st.selectbox(
-        "Estilo",
-        ["femenino", "masculino", "unisex", "streetwear", "minimal", "edgy"]
-    )
+    estilo = st.selectbox("Estilo", ["femenino", "masculino", "unisex", "streetwear", "minimal", "edgy"])
 
     if st.button("Recomendar outfit"):
 
@@ -125,10 +112,10 @@ with tab2:
             df,
             titulo,
             artista,
-            None,
-            None,
-            None,
-            None,
+            feature_cols,
+            scaler,
+            umap_model,
+            kmeans,
             estacion=estacion,
             clima=clima,
             estilo=estilo
@@ -144,6 +131,6 @@ with tab2:
             outfit = res["outfit"]["outfit_final"]
 
             st.markdown("### 👗 Outfit")
-            st.write("Prendas:", outfit["prendas"])
-            st.write("Accesorios:", outfit["accesorios"])
-            st.write("Justificación:", outfit["justificacion"])
+            st.write(outfit["prendas"])
+            st.write(outfit["accesorios"])
+            st.write(outfit["justificacion"])
