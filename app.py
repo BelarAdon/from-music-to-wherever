@@ -81,7 +81,12 @@ with tab1:
 
             mood = song["mood"]
             st.markdown(f"## Mood: {mood}")
-            st.image(mood_imagenes.get(mood))
+            img = mood_imagenes.get(mood)
+
+            if img is None:
+                st.warning(f"No hay imagen para mood: {mood}")
+            else:
+                st.image(img)
 
             # =========================
             # SIMILITUD ULTRA RÁPIDA
