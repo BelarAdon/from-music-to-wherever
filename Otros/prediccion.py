@@ -1,4 +1,4 @@
-from Otros.cargar_modelos import scaler, kmeans, umap_model, feature_cols
+from Otros.cargar_modelos import cargar_modelos
 from Otros.preprocesador import preprocesar_features
 from Otros.outfit_mapping import outfit_mapping
 from Otros.palette_mapping import palette_mapping
