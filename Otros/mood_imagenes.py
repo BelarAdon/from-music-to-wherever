@@ -1,9 +1,9 @@
 mood_imagenes = {
-    "Concierto / Euforia": "imagenes/euforia.jpg",
-    "Intenso / Dramático": "imagenes/dramatico.jpg",
-    "Instrumental / Concentración": "imagenes/concentracion.jpg",
-    "Chill groove / Urbano suave": "imagenes/chillgroove.jpg",
-    "Happy / Buen rollo": "imagenes/happy.jpg",
-    "Fiesta / Subidón": "imagenes/fiesta.jpg",
-    "Triste / Melancólico": "imagenes/melanciolia.jpg"
+    "Concierto / Euforia": "https://github.com/marinaxiuping/from-music-to-wherever/blob/14b861ad2d4fbe46a7daf007f385f07f1ae1e8d0/imagenes/euforia.jpg",
+    "Intenso / Dramático": "https://github.com/marinaxiuping/from-music-to-wherever/blob/14b861ad2d4fbe46a7daf007f385f07f1ae1e8d0/imagenes/dramatic.jpg",
+    "Instrumental / Concentración": "https://github.com/marinaxiuping/from-music-to-wherever/blob/14b861ad2d4fbe46a7daf007f385f07f1ae1e8d0/imagenes/focus.jpg",
+    "Chill groove / Urbano suave": "https://github.com/marinaxiuping/from-music-to-wherever/blob/14b861ad2d4fbe46a7daf007f385f07f1ae1e8d0/imagenes/chill.jpg",
+    "Happy / Buen rollo": "https://github.com/marinaxiuping/from-music-to-wherever/blob/14b861ad2d4fbe46a7daf007f385f07f1ae1e8d0/imagenes/happy.jpg",
+    "Fiesta / Subidón": "https://github.com/marinaxiuping/from-music-to-wherever/blob/14b861ad2d4fbe46a7daf007f385f07f1ae1e8d0/imagenes/party_.jpg",
+    "Triste / Melancólico": "https://github.com/marinaxiuping/from-music-to-wherever/blob/14b861ad2d4fbe46a7daf007f385f07f1ae1e8d0/imagenes/sad.jpg"
 }
