@@ -3,7 +3,7 @@ from Otros.outfit_mapping import outfit_mapping
 from Otros.palette_mapping import palette_mapping
 
 
-def predecir_mood(features_dict, kmeans):
+def predecir_mood(features_dict, feature_cols, scaler, kmeans):
     emb = preprocesar_features(features_dict)
     cluster = int(kmeans.predict(emb)[0])
     mood = outfit_mapping[cluster]["mood_name"]
