@@ -7,24 +7,30 @@ from huggingface_hub import hf_hub_download
 from Otros.prediccion import predecir_mood_por_titulo, generar_outfit_recomendado
 from Otros.mood_imagenes import mood_imagenes
 
-
 repo_id = "Eskarcho/modelo_streamlit"
 
 
-# =========================
-# DATASET (OPTIMIZADO PARQUET)
-# =========================
+# ==========================================
+# DATASET Y MATRIZ (OPTIMIZADO EN CACHÉ)
+# ==========================================
 @st.cache_data
 def load_data():
     path = hf_hub_download(repo_id, "Datos/dataset_final.parquet")
-    return pd.read_parquet(path)
+    data = pd.read_parquet(path)
+    
+    # Extraemos las 10 columnas de embeddings directas a Numpy (Evita np.vstack más adelante)
+    columnas_emb = [f"embedding_{i}" for i in range(10)]
+    matrix = data[columnas_emb].to_numpy().astype(np.float32)
+    
+    return data, matrix
 
-df = load_data()
+# Cargamos el DataFrame y la matriz global libre de duplicados en RAM
+df, emb_matrix = load_data()
 
 
-# =========================
+# ==========================================
 # MODELOS (SOLO UNA VEZ)
-# =========================
+# ==========================================
 @st.cache_resource
 def load_models():
     scaler_path = hf_hub_download(repo_id, "modelos/scaler.pkl")
@@ -43,18 +49,17 @@ def load_models():
 scaler, kmeans, umap_model, feature_cols = load_models()
 
 
-# =========================
+# ==========================================
 # UI
-# =========================
+# ==========================================
 st.title("🎧 Music → Outfit AI PRO")
-
 
 tab1, tab2 = st.tabs(["🎛 Features", "🎵 Song"])
 
 
-# =========================
-# TAB 1 (OPTIMIZADO)
-# =========================
+# ==========================================
+# TAB 1 (OPTIMIZADO CONTRA MEMORY ERROR)
+# ==========================================
 with tab1:
 
     titulo = st.text_input("Título")
@@ -62,41 +67,43 @@ with tab1:
 
     if st.button("Buscar"):
 
-        row = df[
-            (df["track_name"].str.lower() == titulo.lower().strip()) &
-            (df["track_artist"].str.lower() == artista.lower().strip())
-        ]
+        row_mask = (df["track_name"].str.lower() == titulo.lower().strip()) & \
+                   (df["track_artist"].str.lower() == artista.lower().strip())
+        
+        row = df[row_mask]
 
         if row.empty:
             st.error("No encontrada")
         else:
-            row = row.iloc[0]
+            # Conseguimos la posición (índice) exacto de la fila encontrada
+            idx_encontrado = row.index[0]
+            row_data = row.iloc[0]
 
-            st.success(f"{row['track_name']} — {row['track_artist']}")
+            st.success(f"{row_data['track_name']} — {row_data['track_artist']}")
 
-            mood = row["mood"]
+            mood = row_data["mood"]
             st.markdown(f"## {mood}")
             st.image(mood_imagenes.get(mood))
 
-            # =========================
-            # RECOMENDACIÓN ULTRA OPTIMIZADA (NO COPY DF)
-            # =========================
+            # ==========================================
+            # RECOMENDACIÓN CON CERO DUPLICACIÓN DE MEMORIA
+            # ==========================================
+            
+            # Extraemos el vector de la canción usando el índice directo de la matriz precargada
+            emb = emb_matrix[idx_encontrado]
 
-            emb = row[[f"embedding_{i}" for i in range(10)]].values.astype(np.float32)
-
-            emb_matrix = np.vstack(df[[f"embedding_{i}" for i in range(10)]].values).astype(np.float32)
-
-            # vectorizado (MUCHO más rápido y menos RAM)
+            # Operación matemática directa (Broadcasting rápido sin devorar RAM)
             dists = np.linalg.norm(emb_matrix - emb, axis=1)
 
-            idx = np.argsort(dists)[:10]
+            # Ordenamos y extraemos los 10 índices más cercanos
+            idx_mas_cercanos = np.argsort(dists)[:10]
 
-            st.dataframe(df.iloc[idx][["track_name", "track_artist"]])
+            st.dataframe(df.iloc[idx_mas_cercanos][["track_name", "track_artist"]])
 
 
-# =========================
+# ==========================================
 # TAB 2
-# =========================
+# ==========================================
 with tab2:
 
     titulo = st.text_input("Título canción", key="t2")
