@@ -186,3 +186,9 @@ def render_outfit_card(res: dict, height: int = 520):
 </div>
 """
     components.html(html, height=height, scrolling=False)
+    
+def render_outfit_card(res: dict, height: int = 520):
+    import streamlit as st
+    st.write("DEBUG res['outfit']:", res["outfit"])  # ← añade esta línea
+    outfit = res["outfit"]
+    ...
