@@ -8,7 +8,6 @@ from sklearn.neighbors import NearestNeighbors
 from Otros.prediccion import predecir_mood_por_titulo
 from Otros.mood_imagenes import mood_imagenes
 from Otros.outfit_card import render_outfit_card
-from Otros.outfit_ia import generar_outfit_con_ia
 
 # =========================
 # REPO
@@ -168,36 +167,7 @@ with tab2:
                 st.error(res["error"])
                 st.session_state.tab2_activa = False
             else:
-                col_reglas, col_ia = st.columns(2)
-
-                with col_reglas:
-                    st.caption("🗂 Basado en reglas")
-                    render_outfit_card(res, height=500)
-
-                with col_ia:
-                    st.caption("✨ Generado con IA")
-                    with st.spinner("Generando outfit con IA..."):
-                        outfit_ia = generar_outfit_con_ia(
-                            mood=res["mood"],
-                            titulo=res["title"],
-                            artista=res["artist"],
-                            estacion=st.session_state.tab2_estacion,
-                            clima=st.session_state.tab2_clima,
-                            estilo=st.session_state.tab2_estilo,
-                            paleta_colores=res["outfit"].get("paleta_colores", []),
-                        )
-                    if "error" in outfit_ia:
-                        st.error(outfit_ia["error"])
-                    else:
-                        # Construir res compatible para render_outfit_card
-                        res_ia = {
-                            **res,
-                            "outfit": {
-                                **res["outfit"],
-                                "outfit_final": outfit_ia,
-                            }
-                        }
-                        render_outfit_card(res_ia, height=500)
+                render_outfit_card(res)
 
         except Exception as e:
             st.error(f"Error inesperado al procesar la canción: {e}")
