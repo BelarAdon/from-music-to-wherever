@@ -94,7 +94,7 @@ def render_outfit_card(res: dict, height: int = 520):
     accent, dark = MOOD_ACCENT.get(mood, ("#888888", "#1a1a1a"))
 
     prendas_html    = chips(prendas,    accent)
-    accesorios_html = chips(accesorios, "#888888")
+    accesorios_html = chips(accesorios, accent)
 
     html = f"""
 <style>
