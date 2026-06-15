@@ -253,7 +253,7 @@ outfit_mapping = {
     },
 
     3: {
-        "mood_name": "Chill groove / Urbano suave",
+        "mood_name": "Chill Groove / Urbano suave",
 
         "outfit_base": {
             "prendas": ["sudadera suave", "pantalón jogger"],
@@ -337,7 +337,7 @@ outfit_mapping = {
     },
 
     4: {
-        "mood_name": "Happy / Buen rollo",
+        "mood_name": "Happy / Buen Rollo",
 
         "outfit_base": {
             "prendas": ["camiseta colorida", "pantalón claro"],
