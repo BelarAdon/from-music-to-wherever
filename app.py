@@ -80,7 +80,7 @@ for key in ["tab1_activa", "tab1_titulo", "tab1_artista",
 # =========================
 # UI
 # =========================
-st.title("🎧 Music → Hasta el infinito...")
+st.title("🎧 Music → To infinity and beyond!")
 tab1, tab2 = st.tabs(["🎛 Similar Songs", "👗 Outfit Recommender"])
 
 # =========================
