@@ -36,7 +36,7 @@ def build_index(_emb_matrix):
     nn = NearestNeighbors(n_neighbors=11, metric="cosine", algorithm="brute")
     nn.fit(_emb_matrix)
     return nn
-st.write([c for c in df.columns if c.startswith("umap_")])
+
 # =========================
 # MODELOS
 # =========================
@@ -53,6 +53,7 @@ with st.spinner("Cargando datos y modelos..."):
     nn_index         = build_index(emb_matrix)
     scaler, kmeans, feature_cols = load_models()
 
+st.write([c for c in df.columns if c.startswith("umap_")])
 # =========================
 # HELPERS
 # =========================
