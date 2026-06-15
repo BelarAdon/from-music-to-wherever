@@ -35,8 +35,8 @@ def buscar_cancion(df: pd.DataFrame, titulo: str, artista: str = None):
 # =========================
 # PREDICCIÓN
 # =========================
-def predecir_mood(features_dict: dict, feature_cols: list, scaler, kmeans) -> tuple:
-    emb = preprocesar_features(features_dict, feature_cols, scaler)
+def predecir_mood(fila, umap_cols, kmeans):
+    emb = preprocesar_features(fila, umap_cols)
     cluster = int(kmeans.predict(emb)[0])
     mood = outfit_mapping[cluster]["mood_name"]
     return cluster, mood
@@ -98,17 +98,42 @@ def generar_outfit_recomendado(
     }
 
 
-def predecir_mood_por_titulo(
-    df: pd.DataFrame,
-    titulo: str,
-    artista: str,
-    feature_cols: list,
-    scaler,
-    kmeans,
-    estacion: str = None,
-    clima: str = None,
-    estilo: str = None,
-) -> dict:
+def predecir_mood_por_titulo(df, titulo, artista, umap_cols, kmeans, estacion=None, clima=None, estilo=None):
+    fila = buscar_cancion(df, titulo, artista)
+    if fila is None:
+        return {"error": "Canción no encontrada"}
+    cluster, mood = predecir_mood(fila, umap_cols, kmeans)
+    outfit = generar_outfit_recomendado(cluster, estacion=estacion, clima=clima, estilo=estilo)
+    return {
+        "title":   fila["track_name"],
+        "artist":  fila.get("track_artist", "Desconocido"),
+        "mood":    mood,
+        "cluster": cluster,
+        "outfit":  outfit,
+    }
+app.py — define umap_cols y simplifica load_models:
+
+python
+umap_cols = [f"umap_{i}" for i in range(10)]
+
+@st.cache_resource(show_spinner=False)
+def load_models():
+    scaler  = joblib.load(hf_hub_download(repo_id, "modelos/scaler.pkl"))
+    kmeans  = joblib.load(hf_hub_download(repo_id, "modelos/kmeans_umap.pkl"))
+    feature_cols = joblib.load(hf_hub_download(repo_id, "modelos/feature_cols.pkl"))
+    return scaler, kmeans, feature_cols
+
+# Y la llamada:
+res = predecir_mood_por_titulo(
+    df, titulo2, artista2,
+    umap_cols, kmeans,
+    estacion=estacion, clima=clima, estilo=estilo,
+)
+scaler y feature_cols siguen cargándose por si los necesitas en otro sitio, pero ya no participan en la predicción. ¿Quieres que te genere los tres archivos completos corregidos?
+
+
+
+Claude Fa
 
     fila = buscar_cancion(df, titulo, artista)
     if fila is None:
