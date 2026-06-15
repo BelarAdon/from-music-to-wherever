@@ -171,10 +171,7 @@ with tab2:
 
             fila2 = df.loc[idx2]
             fila_debug = buscar_filas(df, st.session_state.tab2_titulo, st.session_state.tab2_artista)
-            if not fila_debug.empty:
-                idx_debug = fila_debug.index[0]
-                st.write("Valores UMAP:", df.loc[idx_debug, UMAP_COLS].tolist())
-                st.write("Cluster predicho:", int(kmeans.predict([df.loc[idx_debug, UMAP_COLS].tolist()])[0]))
+    
             try:
                 res = predecir_mood_por_titulo(
                     df,
