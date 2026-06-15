@@ -139,6 +139,8 @@ with tab2:
         st.write("feature_cols del modelo:", feature_cols)
         st.write("columnas del df:", [c for c in df.columns if c in feature_cols])
         st.write("columnas que faltan:", [c for c in feature_cols if c not in df.columns])
+        st.write("Número de feature_cols:", len(feature_cols))
+        st.write("feature_cols completo:", feature_cols)
         
         if not titulo2.strip():
             st.warning("Introduce al menos el título de la canción.")
