@@ -7,6 +7,7 @@ from huggingface_hub import hf_hub_download
 from sklearn.neighbors import NearestNeighbors
 from Otros.prediccion import predecir_mood_por_titulo
 from Otros.mood_imagenes import mood_imagenes
+from Otros.outfit_card import render_outfit_card
 
 # =========================
 # REPO
@@ -166,13 +167,7 @@ with tab2:
                 st.error(res["error"])
                 st.session_state.tab2_activa = False
             else:
-                st.subheader(f"{res['title']} — {res['artist']}")
-                st.write(f"Mood: {res['mood']}")
-                outfit = res["outfit"]["outfit_final"]
-                st.markdown("### 👗 Outfit")
-                st.write("Prendas:",    outfit["prendas"])
-                st.write("Accesorios:", outfit["accesorios"])
-                st.write(outfit["justificacion"])
+                render_outfit_card(res)
         except Exception as e:
             st.error(f"Error inesperado al procesar la canción: {e}")
             st.session_state.tab2_activa = False
