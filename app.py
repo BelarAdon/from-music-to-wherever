@@ -73,14 +73,14 @@ def buscar_filas(df: pd.DataFrame, titulo: str, artista: str) -> pd.DataFrame:
 # =========================
 for key in ["tab1_activa", "tab1_titulo", "tab1_artista",
             "tab2_activa", "tab2_titulo", "tab2_artista",
-            "tab2_estacion", "tab2_clima", "tab2_estilo"]:
+            "tab2_estacion", "tab2_clima", "tab2_estilo", "tab2_idx"]:
     if key not in st.session_state:
-        st.session_state[key] = False if key.endswith("activa") else ""
+        st.session_state[key] = False if key.endswith("activa") else ("" if key != "tab2_idx" else None)
 
 # =========================
 # UI
 # =========================
-st.title("🎧 Music → Outfit AI PRO")
+st.title("🎧 Music → Hasta el infinito...")
 tab1, tab2 = st.tabs(["🎛 Similar Songs", "👗 Outfit Recommender"])
 
 # =========================
@@ -150,25 +150,44 @@ with tab2:
             st.session_state.tab2_estacion = estacion
             st.session_state.tab2_clima    = clima
             st.session_state.tab2_estilo   = estilo
+            st.session_state.tab2_idx      = None  # resetear selección al buscar de nuevo
 
     if st.session_state.tab2_activa:
-        try:
-            res = predecir_mood_por_titulo(
-                df,
-                st.session_state.tab2_titulo,
-                st.session_state.tab2_artista,
-                UMAP_COLS,
-                kmeans,
-                estacion=st.session_state.tab2_estacion,
-                clima=st.session_state.tab2_clima,
-                estilo=st.session_state.tab2_estilo,
-            )
-            if "error" in res:
-                st.error(res["error"])
-                st.session_state.tab2_activa = False
-            else:
-                render_outfit_card(res)
+        rows2 = buscar_filas(df, st.session_state.tab2_titulo, st.session_state.tab2_artista)
 
-        except Exception as e:
-            st.error(f"Error inesperado al procesar la canción: {e}")
+        if rows2.empty:
+            st.error("No encontrada. Prueba con otro título o artista.")
             st.session_state.tab2_activa = False
+        else:
+            if len(rows2) > 1:
+                opciones2 = [
+                    f"{r['track_name']} — {r['track_artist']}"
+                    for _, r in rows2.iterrows()
+                ]
+                sel2 = st.selectbox("Varias versiones encontradas, elige una:", opciones2, key="sel_tab2")
+                idx2 = rows2.index[opciones2.index(sel2)]
+            else:
+                idx2 = rows2.index[0]
+
+            fila2 = df.loc[idx2]
+
+            try:
+                res = predecir_mood_por_titulo(
+                    df,
+                    fila2["track_name"],
+                    fila2["track_artist"],
+                    UMAP_COLS,
+                    kmeans,
+                    estacion=st.session_state.tab2_estacion,
+                    clima=st.session_state.tab2_clima,
+                    estilo=st.session_state.tab2_estilo,
+                )
+                if "error" in res:
+                    st.error(res["error"])
+                    st.session_state.tab2_activa = False
+                else:
+                    render_outfit_card(res)
+
+            except Exception as e:
+                st.error(f"Error inesperado al procesar la canción: {e}")
+                st.session_state.tab2_activa = False
