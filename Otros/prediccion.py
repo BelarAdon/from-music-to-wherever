@@ -111,29 +111,6 @@ def predecir_mood_por_titulo(df, titulo, artista, umap_cols, kmeans, estacion=No
         "cluster": cluster,
         "outfit":  outfit,
     }
-app.py — define umap_cols y simplifica load_models:
-
-python
-umap_cols = [f"umap_{i}" for i in range(10)]
-
-@st.cache_resource(show_spinner=False)
-def load_models():
-    scaler  = joblib.load(hf_hub_download(repo_id, "modelos/scaler.pkl"))
-    kmeans  = joblib.load(hf_hub_download(repo_id, "modelos/kmeans_umap.pkl"))
-    feature_cols = joblib.load(hf_hub_download(repo_id, "modelos/feature_cols.pkl"))
-    return scaler, kmeans, feature_cols
-
-# Y la llamada:
-res = predecir_mood_por_titulo(
-    df, titulo2, artista2,
-    umap_cols, kmeans,
-    estacion=estacion, clima=clima, estilo=estilo,
-)
-scaler y feature_cols siguen cargándose por si los necesitas en otro sitio, pero ya no participan en la predicción. ¿Quieres que te genere los tres archivos completos corregidos?
-
-
-
-Claude Fa
 
     fila = buscar_cancion(df, titulo, artista)
     if fila is None:
