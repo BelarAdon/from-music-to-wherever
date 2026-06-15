@@ -67,9 +67,7 @@ def render_outfit_card(res: dict, height: int = 520):
     # Chips de prendas
     def chips(items, color):
         return "".join(
-            f'<span style="display:inline-block;background:{color}18;color:{color};'
-            f'border:1px solid {color}40;border-radius:20px;padding:4px 12px;'
-            f'font-size:13px;margin:3px 4px 3px 0;">{item}</span>'
+            f'<span class="chip" style="background:{color}18;color:{color};border:1px solid {color}40;">{item}</span>'
             for item in items
         )
 
@@ -80,10 +78,7 @@ def render_outfit_card(res: dict, height: int = 520):
         is_light = nombre in ["crema", "beige", "amarillo pastel", "azul cielo", "verde menta",
                                "lavanda", "gris suave", "azul suave", "khaki", "plateado"]
         border = f"border:1.5px solid #00000020;" if is_light else ""
-        color_circles += (
-            f'<div title="{nombre}" style="width:32px;height:32px;border-radius:50%;'
-            f'background:{hex_val};{border}flex-shrink:0;"></div>'
-        )
+        color_circles += f'<div class="swatch" title="{nombre}" style="background:{hex_val};{border}"></div>'
 
     # Color de acento según mood
     MOOD_ACCENT = {
@@ -104,13 +99,15 @@ def render_outfit_card(res: dict, height: int = 520):
     html = f"""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ background: transparent; }}
   .card {{
     font-family: 'Inter', sans-serif;
     background: #111;
     border-radius: 16px;
     overflow: hidden;
     color: #fff;
-    max-width: 680px;
+    width: 100%;
   }}
   .card-header {{
     background: linear-gradient(135deg, {dark} 0%, #111 100%);
@@ -128,28 +125,30 @@ def render_outfit_card(res: dict, height: int = 520):
     font-size: 18px; font-weight: 600; color: #fff;
     margin: 0 0 2px; line-height: 1.3;
   }}
-  .song-artist {{
-    font-size: 13px; color: #888; margin: 0;
-  }}
+  .song-artist {{ font-size: 13px; color: #888; margin: 0; }}
   .card-body {{ padding: 20px 24px; }}
   .section-label {{
     font-size: 10px; font-weight: 600; letter-spacing: 1.2px;
     text-transform: uppercase; color: #555; margin-bottom: 8px;
   }}
   .section {{ margin-bottom: 20px; }}
+  .chip {{
+    display: inline-block; border-radius: 20px;
+    padding: 6px 14px; font-size: 13px; margin: 3px 4px 3px 0;
+    line-height: 1.4; word-break: break-word;
+  }}
   .palette-row {{
     display: flex; align-items: center; gap: 8px;
-    margin-bottom: 8px;
+    margin-bottom: 8px; flex-wrap: wrap;
   }}
-  .just-text {{
-    font-size: 12px; color: #666; line-height: 1.5; margin: 0;
+  .swatch {{
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
   }}
-  .divider {{
-    border: none; border-top: 1px solid #222; margin: 4px 0 20px;
-  }}
+  .just-text {{ font-size: 12px; color: #666; line-height: 1.5; }}
+  .divider {{ border: none; border-top: 1px solid #222; margin: 4px 0 20px; }}
 </style>
 
-<div class="card">
+<div class="card" id="card">
   <div class="card-header">
     <div class="mood-badge">{emoji} {mood}</div>
     <p class="song-title">{title}</p>
@@ -171,9 +170,7 @@ def render_outfit_card(res: dict, height: int = 520):
 
     <div class="section">
       <div class="section-label">Paleta de color</div>
-      <div class="palette-row">
-        {color_circles}
-      </div>
+      <div class="palette-row">{color_circles}</div>
       <p class="just-text">{just_paleta}</p>
     </div>
 
@@ -184,6 +181,19 @@ def render_outfit_card(res: dict, height: int = 520):
 
   </div>
 </div>
+
+<script>
+  // Reportar altura real al iframe de Streamlit para evitar cortes en móvil
+  function reportHeight() {{
+    const h = document.getElementById('card').offsetHeight + 32;
+    window.parent.postMessage({{type: 'streamlit:setFrameHeight', height: h}}, '*');
+  }}
+  // Reportar al cargar y tras cualquier cambio de layout
+  window.addEventListener('load', reportHeight);
+  window.addEventListener('resize', reportHeight);
+  setTimeout(reportHeight, 200);
+  setTimeout(reportHeight, 600);
+</script>
 """
-    components.html(html, height=height, scrolling=False)
-    
+    # height generoso como fallback; el JS lo ajusta al tamaño real
+    components.html(html, height=800, scrolling=False)
