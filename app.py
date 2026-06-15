@@ -5,7 +5,7 @@ import numpy as np
 import joblib
 from huggingface_hub import hf_hub_download
 from sklearn.neighbors import NearestNeighbors
-from Otros.prediccion import predecir_mood_por_titulo
+from Otros.prediccion import predecir_mood_por_titulo, predecir_mood_por_fila
 from Otros.mood_imagenes import mood_imagenes
 from Otros.outfit_card import render_outfit_card
 
@@ -170,13 +170,10 @@ with tab2:
                 idx2 = rows2.index[0]
 
             fila2 = df.loc[idx2]
-            fila_debug = buscar_filas(df, st.session_state.tab2_titulo, st.session_state.tab2_artista)
-    
+
             try:
-                res = predecir_mood_por_titulo(
-                    df,
-                    fila2["track_name"],
-                    fila2["track_artist"],
+                res = predecir_mood_por_fila(
+                    fila2,
                     UMAP_COLS,
                     kmeans,
                     estacion=st.session_state.tab2_estacion,
