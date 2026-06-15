@@ -30,69 +30,105 @@ def predecir_mood(fila: pd.Series, umap_cols: list, kmeans) -> tuple:
 
 def combinar_outfits(base, estilo_conf=None, estacion_conf=None, clima_conf=None):
     """
-    Combina outfit con prioridad de capas y límites:
-    - Estilo define la identidad: reemplaza prendas del base, no acumula
-    - Estación añade contexto: sustituye 1 prenda del base si hay solapamiento funcional
-    - Clima aporta solo 1 elemento funcional extra (impermeable, abrigo, etc.)
-    - Límite: máximo 4 prendas y 3 accesorios en el resultado final
-    - Justificación: solo la más relevante (estilo > estación > base)
+    Combina outfit con prioridad de capas y sistema de categorías:
+    - Cada categoría solo puede tener UNA prenda (la de mayor prioridad gana)
+    - Prioridad: estilo > estacion > clima > base
+    - Accesorios: máximo 3, sin duplicar categoría
+    - Justificación: estilo > estacion > base
     """
+
+    # Categorías de prendas para evitar incompatibilidades
+    # Orden importa: se evalúa de arriba abajo, la primera coincidencia gana
+    CATEGORIAS = [
+        # Vestido/mono/conjunto primero — son outfits completos y no deben convivir con top ni pantalón
+        ("vestido",  ["vestido", "minivestido", "slip dress", "co-ord ", "conjunto de punto", "set chándal", "set de chándal"]),
+        ("mono",     ["mono de", "mono de trabajo", "mono oversize"]),
+        # Superior
+        ("top",      ["top ", "camiseta", "camisa", "blusa", "crop", "corset", "body de", "bralette", "tirantes", "túnica"]),
+        ("jersey",   ["jersey", "sudadera", "hoodie", "forro polar", "cardigan", "cárdigan", "chunky knit", "polo"]),
+        # Inferior
+        ("pantalon", ["pantalón", "shorts", "falda", "palazzo", "jogger", "wide leg", "pitillo", "cigarette", "chino"]),
+        # Capa media
+        ("chaqueta", ["chaqueta", "blazer", "bomber", "harrington", "denim"]),
+        # Capa externa — solo una (mayor prioridad gana)
+        ("abrigo",   ["abrigo", "gabardina", "trench", "puffer", "chubasquero", "impermeable", "anorak", "kimono"]),
+        # Calzado
+        ("calzado",  ["botas", "botines", "zapatillas", "sneakers", "sandalias", "mocasines", "zapatos"]),
+        # Accesorios
+        ("sombrero", ["gorro", "gorra", "sombrero", "boina", "beanie", "bucket"]),
+        ("bufanda",  ["bufanda", "pañuelo"]),
+        ("bolso",    ["bolso", "mochila", "riñonera", "tote"]),
+        ("gafas",    ["gafas"]),
+        ("joyeria",  ["collar", "cadena", "pendientes", "anillo", "pulsera", "joyería", "ear cuff", "layering", "body chain", "diadema"]),
+        ("guantes",  ["guantes", "orejeras"]),
+        ("otros_acc",["abanico", "cinturón", "coletero", "calcetines"]),
+    ]
+
+    # Categorías que son outfits completos — excluyen top y pantalón
+    CATS_OUTFIT_COMPLETO = {"vestido", "mono"}
+
+    def detectar_categoria(prenda: str) -> str:
+        p = prenda.lower()
+        for cat, keywords in CATEGORIAS:
+            if any(kw in p for kw in keywords):
+                return cat
+        return "otros"
+
+    # Construir outfit por capas, respetando categorías
+    # Diccionario: categoria -> prenda (gana la de mayor prioridad)
+    prendas_por_cat    = {}
+    accesorios_por_cat = {}
+
+    CATS_PRENDAS    = {"top", "jersey", "vestido", "mono", "pantalon", "chaqueta", "abrigo", "calzado"}
+    CATS_ACCESORIOS = {"sombrero", "bufanda", "bolso", "gafas", "joyeria", "guantes", "otros_acc"}
+
+    def registrar_item(item, sobreescribir=False):
+        cat = detectar_categoria(item)
+        if cat in CATS_ACCESORIOS:
+            if sobreescribir or cat not in accesorios_por_cat:
+                accesorios_por_cat[cat] = item
+        else:
+            if sobreescribir or cat not in prendas_por_cat:
+                prendas_por_cat[cat] = item
+
+    def limpiar_si_outfit_completo():
+        """Si hay vestido o mono, elimina top y pantalón independientes."""
+        if any(c in prendas_por_cat for c in CATS_OUTFIT_COMPLETO):
+            prendas_por_cat.pop("top", None)
+            prendas_por_cat.pop("pantalon", None)
+
+    # Orden de prioridad: base (menor) → clima → estacion → estilo (mayor)
+    for item in base.get("prendas", []):    registrar_item(item, sobreescribir=False)
+    for item in base.get("accesorios", []): registrar_item(item, sobreescribir=False)
+
+    if clima_conf:
+        for item in clima_conf.get("prendas", []):    registrar_item(item, sobreescribir=True)
+        for item in clima_conf.get("accesorios", []): registrar_item(item, sobreescribir=True)
+
+    if estacion_conf:
+        for item in estacion_conf.get("prendas", []):    registrar_item(item, sobreescribir=True)
+        for item in estacion_conf.get("accesorios", []): registrar_item(item, sobreescribir=True)
+
+    if estilo_conf:
+        for item in estilo_conf.get("prendas", []):    registrar_item(item, sobreescribir=True)
+        for item in estilo_conf.get("accesorios", []): registrar_item(item, sobreescribir=True)
+
+    # Si hay vestido o mono, limpiar top y pantalón que puedan haber quedado de capas anteriores
+    limpiar_si_outfit_completo()
+
+    # Justificación: estilo > estacion > base
+    justificacion = base.get("justificacion", "")
+    if estacion_conf and not estilo_conf:
+        justificacion = estacion_conf.get("justificacion", justificacion)
+    if estilo_conf:
+        justificacion = estilo_conf.get("justificacion", justificacion)
+
     MAX_PRENDAS    = 4
     MAX_ACCESORIOS = 3
 
-    # Base como punto de partida (lista ordenada, no set)
-    prendas    = list(base.get("prendas", []))
-    accesorios = list(base.get("accesorios", []))
-    justificacion = base.get("justificacion", "")
-
-    # Capa 1: ESTILO — reemplaza prendas del base, tiene prioridad total
-    if estilo_conf:
-        estilo_prendas    = estilo_conf.get("prendas", [])
-        estilo_accesorios = estilo_conf.get("accesorios", [])
-        # Reemplazar las primeras N prendas del base con las del estilo
-        for i, prenda in enumerate(estilo_prendas):
-            if i < len(prendas):
-                prendas[i] = prenda          # reemplaza
-            else:
-                prendas.append(prenda)       # añade si hay hueco
-        # Accesorios de estilo reemplazan los del base
-        for i, acc in enumerate(estilo_accesorios):
-            if i < len(accesorios):
-                accesorios[i] = acc
-            else:
-                accesorios.append(acc)
-        justificacion = estilo_conf.get("justificacion", justificacion)
-
-    # Capa 2: ESTACIÓN — añade contexto sin duplicar categorías ya cubiertas
-    if estacion_conf:
-        estacion_prendas    = estacion_conf.get("prendas", [])
-        estacion_accesorios = estacion_conf.get("accesorios", [])
-        # Solo añadir si no superamos el límite
-        for prenda in estacion_prendas:
-            if len(prendas) < MAX_PRENDAS and prenda not in prendas:
-                prendas.append(prenda)
-        for acc in estacion_accesorios:
-            if len(accesorios) < MAX_ACCESORIOS and acc not in accesorios:
-                accesorios.append(acc)
-        # La justificación de estación complementa si no hay justificación de estilo
-        if not estilo_conf:
-            justificacion = estacion_conf.get("justificacion", justificacion)
-
-    # Capa 3: CLIMA — solo 1 elemento funcional extra si hay espacio
-    if clima_conf:
-        clima_prendas    = clima_conf.get("prendas", [])
-        clima_accesorios = clima_conf.get("accesorios", [])
-        # Solo el primer elemento funcional de clima
-        for prenda in clima_prendas[:1]:
-            if len(prendas) < MAX_PRENDAS and prenda not in prendas:
-                prendas.append(prenda)
-        for acc in clima_accesorios[:1]:
-            if len(accesorios) < MAX_ACCESORIOS and acc not in accesorios:
-                accesorios.append(acc)
-
     return {
-        "prendas":       prendas[:MAX_PRENDAS],
-        "accesorios":    accesorios[:MAX_ACCESORIOS],
+        "prendas":       list(prendas_por_cat.values())[:MAX_PRENDAS],
+        "accesorios":    list(accesorios_por_cat.values())[:MAX_ACCESORIOS],
         "justificacion": justificacion,
     }
 
