@@ -175,8 +175,11 @@ def predecir_mood_por_titulo(df, titulo, artista, umap_cols, kmeans,
         "outfit":  outfit,
     }
 
-def predecir_mood_por_fila(fila, umap_cols, kmeans, estacion=None, clima=None, estilo=None):
-    cluster, mood = predecir_mood(fila, umap_cols, kmeans)
+def predecir_mood_por_fila(fila, umap_cols, kmeans,
+                            estacion=None, clima=None, estilo=None):
+    # Usar el mood ya calculado en el parquet en vez de predecir
+    mood = fila["mood"]
+    cluster = next(k for k, v in outfit_mapping.items() if v["mood_name"] == mood)
     outfit = generar_outfit_recomendado(cluster, estacion=estacion, clima=clima, estilo=estilo)
     return {
         "title":   fila["track_name"],
