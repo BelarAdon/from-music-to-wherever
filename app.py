@@ -21,8 +21,6 @@ def load_data():
     path = hf_hub_download(repo_id, "Datos/dataset_final.parquet")
     df = pd.read_parquet(path)
     df = df.reset_index(drop=True)
-
-    # FIX 5: detectar columnas de embedding automáticamente en vez de hardcodear 10
     emb_cols = sorted(
         [c for c in df.columns if c.startswith("embedding_")],
         key=lambda c: int(c.split("_")[1])
@@ -30,7 +28,6 @@ def load_data():
     emb_matrix = df[emb_cols].to_numpy(dtype=np.float32)
     return df, emb_matrix
 
-# FIX 3: índice de vecinos precalculado con sklearn — escala bien con datasets grandes
 @st.cache_resource(show_spinner=False)
 def build_index(_emb_matrix):
     nn = NearestNeighbors(n_neighbors=11, metric="cosine", algorithm="brute")
@@ -42,33 +39,42 @@ def build_index(_emb_matrix):
 # =========================
 @st.cache_resource(show_spinner=False)
 def load_models():
-    scaler       = joblib.load(hf_hub_download(repo_id, "modelos/scaler.pkl"))
-    kmeans       = joblib.load(hf_hub_download(repo_id, "modelos/kmeans_umap.pkl"))
-    feature_cols = joblib.load(hf_hub_download(repo_id, "modelos/feature_cols.pkl"))
-    return scaler, kmeans, feature_cols
+    kmeans = joblib.load(hf_hub_download(repo_id, "modelos/kmeans_umap.pkl"))
+    return kmeans
 
-# FIX 1: spinner explícito para que el usuario sepa que algo está cargando
+# Columnas UMAP precalculadas en el dataset (evita cargar umap_model.pkl)
+UMAP_COLS = [f"umap_{i}" for i in range(10)]
+
 with st.spinner("Cargando datos y modelos..."):
-    df, emb_matrix   = load_data()
-    nn_index         = build_index(emb_matrix)
-    scaler, kmeans, feature_cols = load_models()
+    df, emb_matrix = load_data()
+    nn_index       = build_index(emb_matrix)
+    kmeans         = load_models()
 
-st.write([c for c in df.columns if c.startswith("umap_")])
+# Validar que el dataset tiene las columnas umap necesarias
+assert all(c in df.columns for c in UMAP_COLS), \
+    f"Faltan columnas UMAP en el dataset: {[c for c in UMAP_COLS if c not in df.columns]}"
+
 # =========================
 # HELPERS
 # =========================
 def normalizar(s: str) -> str:
-    """FIX 2: normaliza acentos, mayúsculas y espacios para búsqueda tolerante."""
     s = s.lower().strip()
     return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
 
-def buscar_fila(df: pd.DataFrame, titulo: str, artista: str):
-    """Devuelve todas las filas que coinciden (puede haber duplicados)."""
-    mask = (
-        df["track_name"].apply(normalizar).str.contains(normalizar(titulo), regex=False) &
-        df["track_artist"].apply(normalizar).str.contains(normalizar(artista), regex=False)
-    )
+def buscar_filas(df: pd.DataFrame, titulo: str, artista: str) -> pd.DataFrame:
+    mask = df["track_name"].apply(normalizar).str.contains(normalizar(titulo), regex=False)
+    if artista.strip():
+        mask &= df["track_artist"].apply(normalizar).str.contains(normalizar(artista), regex=False)
     return df[mask]
+
+# =========================
+# SESSION STATE
+# =========================
+for key in ["tab1_activa", "tab1_titulo", "tab1_artista",
+            "tab2_activa", "tab2_titulo", "tab2_artista",
+            "tab2_estacion", "tab2_clima", "tab2_estilo"]:
+    if key not in st.session_state:
+        st.session_state[key] = False if key.endswith("activa") else ""
 
 # =========================
 # UI
@@ -80,47 +86,48 @@ tab1, tab2 = st.tabs(["🎛 Similar Songs", "👗 Outfit Recommender"])
 # TAB 1 - SIMILAR SONGS
 # =========================
 with tab1:
-    titulo  = st.text_input("Título",   key="t1")
-    artista = st.text_input("Artista",  key="t1a")
+    titulo  = st.text_input("Título",  key="t1")
+    artista = st.text_input("Artista", key="t1a")
 
     if st.button("Buscar canción", key="btn_search"):
         if not titulo.strip():
             st.warning("Introduce al menos el título de la canción.")
         else:
-            # FIX 2: búsqueda normalizada
-            rows = buscar_fila(df, titulo, artista)
+            st.session_state.tab1_activa  = True
+            st.session_state.tab1_titulo  = titulo
+            st.session_state.tab1_artista = artista
 
-            if rows.empty:
-                st.error("No encontrada. Prueba con otro título o artista.")
+    if st.session_state.tab1_activa:
+        rows = buscar_filas(df, st.session_state.tab1_titulo, st.session_state.tab1_artista)
+
+        if rows.empty:
+            st.error("No encontrada. Prueba con otro título o artista.")
+            st.session_state.tab1_activa = False
+        else:
+            if len(rows) > 1:
+                opciones = [
+                    f"{r['track_name']} — {r['track_artist']} ({r['mood']})"
+                    for _, r in rows.iterrows()
+                ]
+                sel = st.selectbox("Varias versiones encontradas, elige una:", opciones, key="sel_tab1")
+                idx = rows.index[opciones.index(sel)]
             else:
-                # FIX 6: avisar si hay duplicados y dejar elegir
-                if len(rows) > 1:
-                    opciones = [
-                        f"{r['track_name']} — {r['track_artist']} ({r['mood']})"
-                        for _, r in rows.iterrows()
-                    ]
-                    sel = st.selectbox("Varias versiones encontradas, elige una:", opciones)
-                    idx = rows.index[opciones.index(sel)]
-                else:
-                    idx = rows.index[0]
+                idx = rows.index[0]
 
-                song = df.loc[idx]
-                st.success(f"{song['track_name']} — {song['track_artist']}")
-                mood = song["mood"]
-                st.markdown(f"## Mood: {mood}")
+            song = df.loc[idx]
+            st.success(f"{song['track_name']} — {song['track_artist']}")
+            mood = song["mood"]
+            st.markdown(f"## Mood: {mood}")
 
-                img = mood_imagenes.get(mood)
-                if img:
-                    st.image(img)
-                else:
-                    st.warning(f"No hay imagen para mood: {mood}")
+            img = mood_imagenes.get(mood)
+            if img:
+                st.image(img)
+            else:
+                st.warning(f"No hay imagen para mood: {mood}")
 
-                # FIX 3: similitud con índice precalculado — O(log n) en vez de O(n)
-                _, indices = nn_index.kneighbors([emb_matrix[idx]])
-                nearest = indices[0][1:]  # excluir la propia canción
-                st.dataframe(
-                    df.iloc[nearest][["track_name", "track_artist", "mood"]]
-                )
+            _, indices = nn_index.kneighbors([emb_matrix[idx]])
+            nearest = indices[0][1:]
+            st.dataframe(df.iloc[nearest][["track_name", "track_artist", "mood"]])
 
 # =========================
 # TAB 2 - OUTFIT
@@ -130,45 +137,42 @@ with tab2:
     artista2 = st.text_input("Artista",        key="t2a")
     estacion = st.selectbox("Estación", ["primavera", "verano", "otoño", "invierno"])
     clima    = st.selectbox("Clima",    ["sol", "lluvia", "frio", "calor"])
-    estilo   = st.selectbox(
-        "Estilo",
-        ["femenino", "masculino", "unisex", "streetwear", "minimal", "edgy"]
-    )
+    estilo   = st.selectbox("Estilo",   ["femenino", "masculino", "unisex", "streetwear", "minimal", "edgy"])
 
     if st.button("Recomendar outfit", key="btn_outfit"):
-
-        st.write("feature_cols del modelo:", feature_cols)
-        st.write("columnas del df:", [c for c in df.columns if c in feature_cols])
-        st.write("columnas que faltan:", [c for c in feature_cols if c not in df.columns])
-        st.write("Número de feature_cols:", len(feature_cols))
-        st.write("feature_cols completo:", feature_cols)
-        
         if not titulo2.strip():
             st.warning("Introduce al menos el título de la canción.")
         else:
-            # FIX 4: try/except para errores inesperados en el pipeline ML
-            try:
-                res = predecir_mood_por_titulo(
-                    df,
-                    titulo2,
-                    artista2,
-                    feature_cols,
-                    scaler,
-                    kmeans,
-                    estacion=estacion,
-                    clima=clima,
-                    estilo=estilo,
-                )
-                if "error" in res:
-                    st.error(res["error"])
-                else:
-                    st.subheader(f"{res['title']} — {res['artist']}")
-                    st.write(f"Mood: {res['mood']}")
-                    outfit = res["outfit"]["outfit_final"]
-                    st.markdown("### 👗 Outfit")
-                    st.write("Prendas:",     outfit["prendas"])
-                    st.write("Accesorios:",  outfit["accesorios"])
-                    st.write(outfit["justificacion"])
-            except Exception as e:
-                st.error(f"Error inesperado al procesar la canción: {e}")
-                st.stop()
+            st.session_state.tab2_activa   = True
+            st.session_state.tab2_titulo   = titulo2
+            st.session_state.tab2_artista  = artista2
+            st.session_state.tab2_estacion = estacion
+            st.session_state.tab2_clima    = clima
+            st.session_state.tab2_estilo   = estilo
+
+    if st.session_state.tab2_activa:
+        try:
+            res = predecir_mood_por_titulo(
+                df,
+                st.session_state.tab2_titulo,
+                st.session_state.tab2_artista,
+                UMAP_COLS,
+                kmeans,
+                estacion=st.session_state.tab2_estacion,
+                clima=st.session_state.tab2_clima,
+                estilo=st.session_state.tab2_estilo,
+            )
+            if "error" in res:
+                st.error(res["error"])
+                st.session_state.tab2_activa = False
+            else:
+                st.subheader(f"{res['title']} — {res['artist']}")
+                st.write(f"Mood: {res['mood']}")
+                outfit = res["outfit"]["outfit_final"]
+                st.markdown("### 👗 Outfit")
+                st.write("Prendas:",    outfit["prendas"])
+                st.write("Accesorios:", outfit["accesorios"])
+                st.write(outfit["justificacion"])
+        except Exception as e:
+            st.error(f"Error inesperado al procesar la canción: {e}")
+            st.session_state.tab2_activa = False
